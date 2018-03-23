@@ -36,3 +36,5 @@ func TestTasks(t *testing.T) {
 		t.Fatal("Alive.Wait must wait WaitGroup tasks")
 	}
 }
+
+// TODO: test Stop(); go Stop(); Wait()

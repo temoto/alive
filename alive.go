@@ -108,11 +108,13 @@ func (self *Alive) Stop() {
 }
 
 func (self *Alive) finish() {
+	self.WaitTasks()
 	self.lk.Lock()
 	defer self.lk.Unlock()
 	switch self.state {
+	case stateFinished:
+		return
 	case stateStopping:
-		self.WaitTasks()
 		self.state = stateFinished
 		push(self.chFinish)
 		return
