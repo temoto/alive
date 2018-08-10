@@ -60,3 +60,11 @@ Install
 
 `go get -u github.com/temoto/alive`
 
+Flair
+=====
+
+.. image:: https://travis-ci.org/temoto/alive.svg?branch=master
+    :target: https://travis-ci.org/temoto/alive
+
+.. image:: https://codecov.io/gh/temoto/alive/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/temoto/alive
