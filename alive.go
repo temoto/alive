@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 )
 
-type nothing struct{}
-
 const (
 	stateRunning = iota
 	stateStopping
@@ -37,15 +35,15 @@ type Alive struct {
 	wg       sync.WaitGroup
 	state    uint32
 	lk       sync.Mutex
-	chStop   chan nothing
-	chFinish chan nothing
+	chStop   chan struct{}
+	chFinish chan struct{}
 }
 
 func NewAlive() *Alive {
 	self := &Alive{
 		state:    stateRunning,
-		chStop:   make(chan nothing, 1),
-		chFinish: make(chan nothing, 1),
+		chStop:   make(chan struct{}, 1),
+		chFinish: make(chan struct{}, 1),
 	}
 	return self
 }
@@ -76,10 +74,10 @@ func (self *Alive) IsRunning() bool  { return atomic.LoadUint32(&self.state) == 
 func (self *Alive) IsStopping() bool { return atomic.LoadUint32(&self.state) == stateStopping }
 func (self *Alive) IsFinished() bool { return atomic.LoadUint32(&self.state) == stateFinished }
 
-func push(ch chan nothing) {
+func push(ch chan struct{}) {
 	for {
 		select {
-		case ch <- nothing{}:
+		case ch <- struct{}{}:
 			continue
 		default:
 			return
@@ -87,7 +85,7 @@ func push(ch chan nothing) {
 	}
 }
 
-func pull(ch chan nothing) {
+func pull(ch chan struct{}) {
 	<-ch
 	push(ch)
 }
@@ -122,18 +120,18 @@ func (self *Alive) finish() {
 	panic(formatBugState(self.state, "finish"))
 }
 
-func (self *Alive) StopChan() <-chan nothing {
-	ch := make(chan nothing)
-	go func(ch1, ch2 chan nothing) {
+func (self *Alive) StopChan() <-chan struct{} {
+	ch := make(chan struct{})
+	go func(ch1, ch2 chan struct{}) {
 		pull(ch1)
 		push(ch2)
 	}(self.chStop, ch)
 	return ch
 }
 
-func (self *Alive) WaitChan() <-chan nothing {
-	ch := make(chan nothing)
-	go func(w func(), ch1, ch2 chan nothing) {
+func (self *Alive) WaitChan() <-chan struct{} {
+	ch := make(chan struct{})
+	go func(w func(), ch1, ch2 chan struct{}) {
 		w()
 		pull(ch1)
 		push(ch2)
