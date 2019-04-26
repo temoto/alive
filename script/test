@@ -2,18 +2,4 @@
 set -eu
 cd "$( dirname "${BASH_SOURCE[0]}" )/.."
 
-target=./coverage.txt
-tmp=/tmp/coverage-single-package.txt
-flags=(
-  -covermode=atomic
-  -coverprofile="$tmp"
-  -race
-)
-
-rm -f "$target"
-# workaround cannot use test profile flag with multiple packages
-for d in $(go list ./... |fgrep -v 'vendor/') ; do
-  go test ${flags[@]} $d
-  [[ -r "$tmp" ]] && cat "$tmp" >>"$target"
-  rm -f "$tmp"
-done
+go test -v -covermode=atomic -coverprofile=coverage.txt -race ./...
