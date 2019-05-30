@@ -37,4 +37,10 @@ func TestTasks(t *testing.T) {
 	}
 }
 
-// TODO: test Stop(); go Stop(); Wait()
+func TestConcurrentStop(t *testing.T) {
+	a := NewAlive()
+	go a.Stop()
+	go a.Stop()
+	go a.IsRunning()
+	a.Wait()
+}

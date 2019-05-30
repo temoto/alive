@@ -93,31 +93,33 @@ func pull(ch chan struct{}) {
 func (self *Alive) Stop() {
 	self.lk.Lock()
 	defer self.lk.Unlock()
-	switch self.state {
+	state := atomic.LoadUint32(&self.state)
+	switch state {
 	case stateRunning:
-		self.state = stateStopping
+		atomic.StoreUint32(&self.state, stateStopping)
 		push(self.chStop)
 		go self.finish()
 		return
 	case stateStopping, stateFinished:
 		return
 	}
-	panic(formatBugState(self.state, "Stop"))
+	panic(formatBugState(state, "Stop"))
 }
 
 func (self *Alive) finish() {
 	self.WaitTasks()
 	self.lk.Lock()
 	defer self.lk.Unlock()
-	switch self.state {
+	state := atomic.LoadUint32(&self.state)
+	switch state {
 	case stateFinished:
 		return
 	case stateStopping:
-		self.state = stateFinished
+		atomic.StoreUint32(&self.state, stateFinished)
 		push(self.chFinish)
 		return
 	}
-	panic(formatBugState(self.state, "finish"))
+	panic(formatBugState(state, "finish"))
 }
 
 func (self *Alive) StopChan() <-chan struct{} {
