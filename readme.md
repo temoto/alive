@@ -1,14 +1,14 @@
-What
-====
+# What
 
 alive waits for subtasks, coordinate graceful or fast shutdown. sync.WaitGroup on steroids.
 
-Usage
-=====
+
+# Usage [![GoDoc](https://godoc.org/github.com/temoto/alive?status.svg)](https://godoc.org/github.com/temoto/alive)
 
 Key takeaways:
 
-* Zero value of `alive.Alive{}` is *not* ready, you *must* use `NewAlive()` constructor.
+* `go get github.com/temoto/alive`
+* Zero value of `alive.Alive{}` is *not* usable ever, you *must* use `NewAlive()` constructor.
 ```
     srv := MyServer{ alive: alive.NewAlive() }
 ```
@@ -54,14 +54,11 @@ func main() {
     }
 ```
 * `.WaitChan()` is `select`-friendly version of `.Wait()`.
+* Incorrect API usage `.Stop() ; .Add()` will panic. Please tell me how to remove it while staying interface compatible with WaitGroup.
+* There are few more `panic()` which should never happen, like debug-build assertions. But please tell me if you find a way to trigger `"Bug in package"`
 
-Install
-=======
 
-`go get -u github.com/temoto/alive`
-
-Flair
-=====
+# Flair
 
 [![Build status](https://travis-ci.org/temoto/alive.svg?branch=master)](https://travis-ci.org/temoto/alive)
 [![Coverage](https://codecov.io/gh/temoto/alive/branch/master/graph/badge.svg)](https://codecov.io/gh/temoto/alive)

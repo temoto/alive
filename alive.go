@@ -13,6 +13,8 @@ const (
 	stateFinished
 )
 
+const NotRunning = "Alive.Add(): need state Running. Attempted to run new task after Stop()"
+
 func stateString(s uint32) string {
 	switch s {
 	case stateRunning:
@@ -31,6 +33,9 @@ Please post minimal reproduction code on Github issues, see package import path.
 		state, stateString(state), source)
 }
 
+// Alive waits for subtasks, coordinate graceful or fast shutdown.
+// Exported for easy/fast direct references in your code.
+// Zero `Alive{}` is not usable ever. You *must* call `NewAlive()`.
 type Alive struct {
 	wg       sync.WaitGroup
 	state    uint32
@@ -42,12 +47,14 @@ type Alive struct {
 func NewAlive() *Alive {
 	self := &Alive{
 		state:    stateRunning,
-		chStop:   make(chan struct{}, 1),
-		chFinish: make(chan struct{}, 1),
+		chStop:   make(chan struct{}),
+		chFinish: make(chan struct{}),
 	}
 	return self
 }
 
+// Corresponds to `sync.WaitGroup.Add()`
+// `a.Stop() ; a.Add(_)` will `panic(NotRunning)`
 func (self *Alive) Add(delta int) {
 	state := atomic.LoadUint32(&self.state)
 	switch state {
@@ -55,11 +62,12 @@ func (self *Alive) Add(delta int) {
 		self.wg.Add(delta)
 		return
 	case stateStopping, stateFinished:
-		panic("Alive.Add(): need state Running. Attempted to run new task after Stop().")
+		panic(NotRunning)
 	}
 	panic(formatBugState(state, "Add"))
 }
 
+// Corresponds to `sync.WaitGroup.Done()`
 func (self *Alive) Done() {
 	state := atomic.LoadUint32(&self.state)
 	switch state {
@@ -74,22 +82,9 @@ func (self *Alive) IsRunning() bool  { return atomic.LoadUint32(&self.state) == 
 func (self *Alive) IsStopping() bool { return atomic.LoadUint32(&self.state) == stateStopping }
 func (self *Alive) IsFinished() bool { return atomic.LoadUint32(&self.state) == stateFinished }
 
-func push(ch chan struct{}) {
-	for {
-		select {
-		case ch <- struct{}{}:
-			continue
-		default:
-			return
-		}
-	}
-}
-
-func pull(ch chan struct{}) {
-	<-ch
-	push(ch)
-}
-
+// Stop puts Alive into Stopping mode, closes `StopChan()` and returns immediately.
+// After all pending tasks `Done()` state changes to Finished and unblocks all `Wait*` calls/channel.
+// Multiple and concurrent calls are allowed and produce same result.
 func (self *Alive) Stop() {
 	self.lk.Lock()
 	defer self.lk.Unlock()
@@ -97,7 +92,7 @@ func (self *Alive) Stop() {
 	switch state {
 	case stateRunning:
 		atomic.StoreUint32(&self.state, stateStopping)
-		push(self.chStop)
+		close(self.chStop)
 		go self.finish()
 		return
 	case stateStopping, stateFinished:
@@ -108,46 +103,31 @@ func (self *Alive) Stop() {
 
 func (self *Alive) finish() {
 	self.WaitTasks()
-	self.lk.Lock()
-	defer self.lk.Unlock()
-	state := atomic.LoadUint32(&self.state)
-	switch state {
-	case stateFinished:
-		return
-	case stateStopping:
-		atomic.StoreUint32(&self.state, stateFinished)
-		push(self.chFinish)
-		return
-	}
-	panic(formatBugState(state, "finish"))
+	atomic.StoreUint32(&self.state, stateFinished)
+	close(self.chFinish)
 }
 
+// StopChan is closed when `Stop()` is called.
 func (self *Alive) StopChan() <-chan struct{} {
-	ch := make(chan struct{})
-	go func(ch1, ch2 chan struct{}) {
-		pull(ch1)
-		push(ch2)
-	}(self.chStop, ch)
-	return ch
+	return self.chStop
 }
 
+// WaitChan is closed when both `Stop()` is called **and** all pending tasks done.
+// Multiple and concurrent `Wait()`/`<-WaitChan()` are allowed and produce same result.
 func (self *Alive) WaitChan() <-chan struct{} {
-	ch := make(chan struct{})
-	go func(w func(), ch1, ch2 chan struct{}) {
-		w()
-		pull(ch1)
-		push(ch2)
-	}(self.WaitTasks, self.chFinish, ch)
-	return ch
+	return self.chFinish
 }
 
+// Corresponds to `sync.WaitGroup.Wait()`
+// Multiple and concurrent calls allowed and produce same result.
 func (self *Alive) WaitTasks() {
 	self.wg.Wait()
 }
 
+// Wait returns after both `Stop()` is called **and** all pending tasks done.
+// Multiple and concurrent `Wait()`/`<-WaitChan()` are allowed and produce same result.
 func (self *Alive) Wait() {
-	self.WaitTasks()
-	pull(self.chFinish)
+	<-self.chFinish
 }
 
 func (self *Alive) String() string {
