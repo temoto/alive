@@ -54,17 +54,20 @@ func NewAlive() *Alive {
 }
 
 // Corresponds to `sync.WaitGroup.Add()`
-// `a.Stop() ; a.Add(_)` will `panic(NotRunning)`
-func (self *Alive) Add(delta int) {
-	state := atomic.LoadUint32(&self.state)
-	switch state {
-	case stateRunning:
-		self.wg.Add(delta)
-		return
-	case stateStopping, stateFinished:
-		panic(NotRunning)
+// Returns `true` on successful increment or `false` after `Stop()`.
+func (self *Alive) Add(delta int) bool {
+	// pessimistic fast path
+	if !self.IsRunning() {
+		return false
 	}
-	panic(formatBugState(state, "Add"))
+
+	self.lk.Lock()
+	defer self.lk.Unlock()
+	if !self.IsRunning() {
+		return false
+	}
+	self.wg.Add(delta)
+	return true
 }
 
 // Corresponds to `sync.WaitGroup.Done()`

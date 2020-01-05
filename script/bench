@@ -1,10 +1,29 @@
 #!/bin/bash
 set -eu
 
-go get golang.org/x/tools/cmd/benchcmp
-go test -run=NONE -bench=. -count=3 -test.benchmem=true >bench-new
-git fetch origin master
-git stash
-git checkout -f FETCH_HEAD -- .
-go test -run=NONE -bench=. -count=3 -test.benchmem=true >bench-old
-benchcmp -best -mag bench-{old,new}
+main() {
+    if ! which benchcmp >/dev/null ; then
+        go_mod_get golang.org/x/tools/cmd/benchcmp
+    fi
+    go test -run=NONE -bench=. -count=3 -test.benchmem=true >bench-new
+    git fetch origin master
+    git stash
+    git checkout -f FETCH_HEAD -- .
+    go test -run=NONE -bench=. -count=3 -test.benchmem=true >bench-old
+    benchcmp -best -mag bench-{old,new}
+}
+
+go_mod_get() {
+    local rc=0
+    local target=$(mktemp -d)
+    (
+        set -eux
+        cd "$target"
+        GO111MODULE=on go mod init tmp
+        GO111MODULE=on go get "$@"
+    ) || rc=$?
+    rm -rf "$target"
+    return $rc
+}
+
+main "$@"

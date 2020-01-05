@@ -7,16 +7,18 @@ alive waits for subtasks, coordinate graceful or fast shutdown. sync.WaitGroup o
 
 Key takeaways:
 
-* `go get github.com/temoto/alive`
+* `go get github.com/temoto/alive/v2`
 * Zero value of `alive.Alive{}` is *not* usable ever, you *must* use `NewAlive()` constructor.
 ```
     srv := MyServer{ alive: alive.NewAlive() }
 ```
-* Call `.Add(n)` and `.Done()` just as with `WaitGroup`, monitor `.IsRunning()`.
+* Call `.Add(n)` and `.Done()` just as with `WaitGroup` but check return value.
 ```
-    for srv.alive.IsRunning() {
+    for {
         task := <-queue
-        srv.alive.Add(1)
+        if !srv.alive.Add(1) {
+            break
+        }
         go func() {
             // be useful
             srv.alive.Done()
@@ -41,7 +43,7 @@ func main() {
     srv.alive.Wait()
 }
 ```
-* `.StopChan()` lets your observe `.Stop()` call from another place. A better option to `IsRunning()` poll.
+* `.StopChan()` lets you observe `.Stop()` call from another place. A better option to `IsRunning()` poll.
 ```
     stopch := srv.alive.StopChan()
     for {
@@ -54,8 +56,7 @@ func main() {
     }
 ```
 * `.WaitChan()` is `select`-friendly version of `.Wait()`.
-* Incorrect API usage `.Stop() ; .Add()` will panic. Please tell me how to remove it while staying interface compatible with WaitGroup.
-* There are few more `panic()` which should never happen, like debug-build assertions. But please tell me if you find a way to trigger `"Bug in package"`
+* There are few `panic()` which should never happen, like debug-build assertions. But please tell me if you find a way to trigger `"Bug in package"`
 
 
 # Flair

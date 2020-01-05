@@ -1,6 +1,8 @@
 package alive
 
 import (
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -23,7 +25,7 @@ func Test01(t *testing.T) {
 
 func TestTasks(t *testing.T) {
 	a := NewAlive()
-	a.Add(1)
+	requireBool(t, true, a.Add(1))
 	expectStateRunning(t, a)
 	a.Stop()
 	expectStateStopping(t, a)
@@ -55,7 +57,7 @@ func TestConcurrentStop(t *testing.T) {
 func TestMultiStopChan(t *testing.T) {
 	a := NewAlive()
 	stopch := a.StopChan()
-	a.Add(1)
+	requireBool(t, true, a.Add(1))
 	go a.Stop()
 	<-stopch
 	expectStateStopping(t, a)
@@ -66,7 +68,7 @@ func TestMultiStopChan(t *testing.T) {
 func TestMultiWaitChan(t *testing.T) {
 	a := NewAlive()
 	expectStateRunning(t, a)
-	a.Add(1)
+	requireBool(t, true, a.Add(1))
 	waitch := a.WaitChan()
 	go a.Stop()
 	go a.Done()
@@ -75,18 +77,39 @@ func TestMultiWaitChan(t *testing.T) {
 	<-waitch
 }
 
+func TestAdd(t *testing.T) {
+	a := NewAlive()
+	requireBool(t, true, a.Add(1))
+}
+
 func TestAddAfterStop(t *testing.T) {
-	func() { // don't spill panic/recover to testing framework
-		a := NewAlive()
-		a.Stop()
-		defer func() {
-			x := recover()
-			if s, ok := x.(string); !ok || s != NotRunning {
-				t.Errorf("expected panic(NotRunning) recover=%v", x)
+	a := NewAlive()
+	a.Stop()
+	requireBool(t, false, a.Add(1))
+}
+
+func BenchmarkAdd(b *testing.B) {
+	for _, c := range []int{1, 4, 16, 64, 256} {
+		b.Run(strconv.Itoa(c), func(b *testing.B) {
+			a := NewAlive()
+			b.ReportAllocs()
+			b.ResetTimer()
+			wg := sync.WaitGroup{}
+			wg.Add(c)
+			for p := 1; p <= c; p++ {
+				go func() {
+					for i := 1; i <= b.N; i++ {
+						requireBool(b, true, a.Add(1))
+						a.Done()
+					}
+					wg.Done()
+				}()
 			}
-		}()
-		a.Add(1)
-	}()
+			wg.Wait()
+			a.Stop()
+			a.WaitTasks()
+		})
+	}
 }
 
 func BenchmarkConcurrentStopChan(b *testing.B) {
@@ -94,7 +117,7 @@ func BenchmarkConcurrentStopChan(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 1; i <= b.N; i++ {
-		a.Add(1)
+		requireBool(b, true, a.Add(1))
 		go func() {
 			<-a.StopChan()
 			a.Done()
@@ -102,6 +125,15 @@ func BenchmarkConcurrentStopChan(b *testing.B) {
 	}
 	a.Stop()
 	a.WaitTasks()
+}
+
+func requireBool(t testing.TB, expect, actual bool) bool {
+	t.Helper()
+	if actual != expect {
+		t.Fatalf("expected %t", expect)
+		return false
+	}
+	return true
 }
 
 func expectStateRunning(t testing.TB, a *Alive) {
